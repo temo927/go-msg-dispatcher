@@ -1,0 +1,22 @@
+# Go build outputs
+/bin/
+/build/
+/out/
+*.exe
+*.log
+*.tmp
+
+# IDEs
+.vscode/
+.idea/
+
+# Env files
+.env
+.env.local
+
+# Vendor or dependencies
+vendor/
+
+# OS junk
+.DS_Store
+Thumbs.db

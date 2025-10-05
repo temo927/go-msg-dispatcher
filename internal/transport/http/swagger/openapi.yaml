@@ -18,13 +18,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnvelopeSuccess'
-              examples:
-                started:
-                  value:
-                    status: ok
-                    data:
-                      message: scheduler started
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: scheduler started
         "500":
           description: Internal server error
           content:
@@ -42,13 +45,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnvelopeSuccess'
-              examples:
-                stopped:
-                  value:
-                    status: ok
-                    data:
-                      message: scheduler stopped
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: scheduler stopped
         "500":
           description: Internal server error
           content:
@@ -79,19 +85,34 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnvelopeSentList'
-              examples:
-                example:
-                  value:
-                    status: ok
-                    data:
-                      items:
-                        - id: "67f2f8a8-ea58-4ed0-a6f9-ff217df4d849"
-                          to_phone: "+905551111111"
-                          content: "Insider - Project"
-                          provider_message_id: "67f2f8a8-ea58-4ed0-a6f9-ff217df4d849"
-                          sent_at: "2025-10-05T18:11:04Z"
-                      count: 1
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                to_phone:
+                                  type: string
+                                content:
+                                  type: string
+                                provider_message_id:
+                                  type: string
+                                  nullable: true
+                                sent_at:
+                                  type: string
+                                  format: date-time
+                                  nullable: true
+                          count:
+                            type: integer
+                            example: 1
         "500":
           description: Internal server error
           content:
@@ -120,15 +141,24 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnvelopeCreateResponse'
-              examples:
-                created:
-                  value:
-                    status: ok
-                    data:
-                      id: "524eca80-b1ab-429d-9d86-493717b1ee80"
-                      status: "queued"
-                      created: "2025-10-05T18:11:04Z"
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeSuccess'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "524eca80-b1ab-429d-9d86-493717b1ee80"
+                          status:
+                            type: string
+                            enum: [queued, processing, sent, failed]
+                            example: queued
+                          created:
+                            type: string
+                            format: date-time
+                            example: "2025-10-05T18:11:04Z"
         "400":
           description: Invalid request (missing to_phone/content or bad JSON)
           content:
@@ -151,9 +181,8 @@ components:
           type: string
           example: ok
         data:
-          type: object
-          additionalProperties: true
-
+          nullable: true
+          description: Endpoint-specific payload (shape is inlined per route)
     EnvelopeError:
       type: object
       properties:
@@ -167,7 +196,6 @@ components:
           type: string
           nullable: true
           example: internal_error
-
     CreateMessageRequest:
       type: object
       required: [to_phone, content]
@@ -179,58 +207,3 @@ components:
           type: string
           maxLength: 1000
           example: "Welcome to our platform! Your code is 4321."
-
-    EnvelopeCreateResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: ok
-        data:
-          type: object
-          properties:
-            id:
-              type: string
-              example: "524eca80-b1ab-429d-9d86-493717b1ee80"
-            status:
-              type: string
-              enum: [queued, processing, sent, failed]
-              example: queued
-            created:
-              type: string
-              format: date-time
-              example: "2025-10-05T18:11:04Z"
-
-    SentMessageItem:
-      type: object
-      properties:
-        id:
-          type: string
-        to_phone:
-          type: string
-        content:
-          type: string
-        provider_message_id:
-          type: string
-          nullable: true
-        sent_at:
-          type: string
-          format: date-time
-          nullable: true
-
-    EnvelopeSentList:
-      type: object
-      properties:
-        status:
-          type: string
-          example: ok
-        data:
-          type: object
-          properties:
-            items:
-              type: array
-              items:
-                $ref: '#/components/schemas/SentMessageItem'
-            count:
-              type: integer
-              example: 1

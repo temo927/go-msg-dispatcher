@@ -1,0 +1,116 @@
+openapi: 3.0.3
+info:
+  title: Message Dispatcher API
+  version: "1.0.0"
+  description: >
+    A simple API for controlling and monitoring the automatic message sending system.
+
+servers:
+  - url: http://localhost:8080
+
+paths:
+  /api/v1/scheduler/start:
+    post:
+      summary: Start the automatic message sending scheduler
+      responses:
+        "200":
+          description: Scheduler started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: scheduler started
+        "409":
+          description: Scheduler already running
+        "500":
+          description: Internal server error
+
+  /api/v1/scheduler/stop:
+    post:
+      summary: Stop the automatic message sending scheduler
+      responses:
+        "200":
+          description: Scheduler stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: string
+                        example: scheduler stopped
+        "409":
+          description: Scheduler not running
+        "500":
+          description: Internal server error
+
+  /api/v1/messages/sent:
+    get:
+      summary: Retrieve a list of sent messages
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of sent messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: 67f2f8a8-ea58-4ed0-a6f9-ff217df4d849
+                            to_phone:
+                              type: string
+                              example: "+995555111111"
+                            content:
+                              type: string
+                              example: "Insider - Project"
+                            provider_message_id:
+                              type: string
+                              example: 67f2f8a8-ea58-4ed0-a6f9-ff217df4d849
+                            sent_at:
+                              type: string
+                              format: date-time
+                      count:
+                        type: integer
+                        example: 1
+        "500":
+          description: Internal server error

@@ -1,12 +1,18 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/temo927/go-msg-dispatcher/internal/app"
 	"github.com/temo927/go-msg-dispatcher/internal/domain"
 )
+
+type createMessageRequest struct {
+	ToPhone string `json:"to_phone"`
+	Content string `json:"content"`
+}
 
 type Handlers struct {
 	Scheduler *app.Scheduler
@@ -68,12 +74,36 @@ func (h *Handlers) ListSent(w http.ResponseWriter, r *http.Request) {
 	resp := make([]map[string]any, 0, len(msgs))
 	for _, m := range msgs {
 		resp = append(resp, map[string]any{
-			"id":                 m.ID,
-			"to_phone":           m.ToPhone,
-			"content":            m.Content,
+			"id":                  m.ID,
+			"to_phone":            m.ToPhone,
+			"content":             m.Content,
 			"provider_message_id": m.ProviderMessageID,
-			"sent_at":            m.SentAt,
+			"sent_at":             m.SentAt,
 		})
 	}
 	JSONSuccess(w, http.StatusOK, map[string]any{"items": resp, "count": len(resp)})
+}
+
+func (h *Handlers) CreateMessage(w http.ResponseWriter, r *http.Request) {
+	var req createMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.ToPhone == "" || req.Content == "" {
+		JSONError(w, http.StatusBadRequest, "to_phone and content are required")
+		return
+	}
+
+	msg, err := h.Repo.Create(r.Context(), req.ToPhone, req.Content)
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	JSONSuccess(w, http.StatusCreated, map[string]any{
+		"id":      msg.ID,
+		"status":  msg.Status,
+		"created": msg.CreatedAt,
+	})
 }

@@ -10,6 +10,7 @@ func NewRouter(h *Handlers) http.Handler {
 	mux.HandleFunc("/api/v1/scheduler/start", h.StartScheduler)
 	mux.HandleFunc("/api/v1/scheduler/stop", h.StopScheduler)
 	mux.HandleFunc("/api/v1/messages/sent", h.ListSent)
+	mux.HandleFunc("/api/v1/messages", h.CreateMessage)
 
 	RegisterSwagger(mux, "internal/transport/http/swagger")
 

@@ -27,6 +27,9 @@ type Client struct {
 }
 
 func NewClient(cfg Config) *Client {
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 5 * time.Second 
+	}
 	return &Client{
 		http: &http.Client{Timeout: cfg.Timeout},
 		cfg:  cfg,
@@ -43,7 +46,6 @@ type webhookResponse struct {
 	MessageID string `json:"messageId"`
 }
 
-// Send sends a message payload to webhook.site and returns provider messageId.
 func (c *Client) Send(ctx context.Context, msg domain.Message) (string, error) {
 	body, err := json.Marshal(webhookPayload{
 		To:      msg.ToPhone,

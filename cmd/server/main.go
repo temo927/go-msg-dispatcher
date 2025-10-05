@@ -2,48 +2,99 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
+
+	"github.com/temo927/go-msg-dispatcher/internal/app"
+	"github.com/temo927/go-msg-dispatcher/internal/infra/cache"
+	"github.com/temo927/go-msg-dispatcher/internal/infra/config"
+	"github.com/temo927/go-msg-dispatcher/internal/infra/log"
+	"github.com/temo927/go-msg-dispatcher/internal/infra/repository"
+	"github.com/temo927/go-msg-dispatcher/internal/infra/webhook"
+	httpapi "github.com/temo927/go-msg-dispatcher/internal/transport/http"
 )
 
 func main() {
-	port := os.Getenv("PORT")
+	cfg := config.Load()
+
+	db, err := repository.Connect(cfg.DBDSN)
+	if err != nil {
+		log.Logger.Error("failed to connect postgres", "err", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	log.Logger.Info("connected to postgres")
+
+	cacheAdapter := cache.New(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB, cfg.RedisTTL)
+
+	provider := webhook.NewClient(webhook.Config{
+		URL:          cfg.WebhookURL,
+		AuthHeader:   cfg.WebhookAuthHeader,
+		AuthValue:    cfg.WebhookAuthValue,
+		AcceptAny2xx: cfg.AcceptAny2xx,
+		Timeout:      5 * time.Second,
+	})
+
+	messageRepo := repository.NewMessagesRepo(db)
+	sender := app.NewSender(
+		messageRepo,
+		provider,
+		cacheAdapter,
+		app.SenderConfig{MaxRetries: cfg.MaxRetries},
+	)
+	scheduler := app.NewScheduler(messageRepo, sender, cfg.TickInterval, cfg.BatchSize)
+
+	handlers := httpapi.NewHandlers(scheduler, messageRepo)
+	router := httpapi.NewRouter(handlers)
+
+	port := cfg.Port
 	if port == "" {
 		port = "8080"
 	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`OK`))
-	})
-
 	srv := &http.Server{
-		Addr:         ":" + port,
-		Handler:      mux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:         fmt.Sprintf(":%s", port),
+		Handler:      router,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// graceful shutdown
+	// --- OS signals for graceful shutdown ---
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// --- start HTTP server (blocks), so run in a goroutine ---
 	go func() {
-		log.Printf("listening on :%s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+		log.Logger.Info("server started", "addr", srv.Addr)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Logger.Error("server error", "err", err)
+			os.Exit(1)
 		}
 	}()
 
-	// wait for Ctrl+C / docker stop
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
-	<-stop
+	// --- auto-start scheduler (non-blocking, idempotent) ---
+	if err := scheduler.Start(context.Background()); err != nil {
+		log.Logger.Error("auto-start scheduler failed", "err", err)
+	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// --- wait for shutdown signal ---
+	<-ctx.Done()
+	log.Logger.Info("shutdown initiated")
+
+	// 1) stop periodic background work first
+	_ = scheduler.Stop()
+
+	// 2) then gracefully stop HTTP server
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = srv.Shutdown(ctx)
-	log.Println("shutdown complete")
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Logger.Error("graceful shutdown failed", "err", err)
+	}
+
+	log.Logger.Info("server stopped cleanly")
 }

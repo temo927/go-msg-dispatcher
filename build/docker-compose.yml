@@ -52,21 +52,18 @@ services:
 
   migrate:
     image: postgres:16
-    container_name: msgsvc-migrate
     depends_on:
       postgres:
         condition: service_healthy
     environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-msgsvc}
+      PGUSER: ${POSTGRES_USER:-postgres}
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
-      - ../internal/infra/db/migrations:/migrations:ro
-    command:
-      - bash
-      - -lc
-      - |
-        psql -h postgres -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-msgsvc} \
-          -v ON_ERROR_STOP=1 \
-          -f /migrations/001_init.sql
+      - ../internal/infra/migrations:/migrations:ro
+    command: ["psql", "-v", "ON_ERROR_STOP=1", "-f", "/migrations/001_init.sql"]
     restart: "no"
 
 volumes:

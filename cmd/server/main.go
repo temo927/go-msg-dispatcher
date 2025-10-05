@@ -64,11 +64,9 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// --- OS signals for graceful shutdown ---
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// --- start HTTP server (blocks), so run in a goroutine ---
 	go func() {
 		log.Logger.Info("server started", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -77,19 +75,15 @@ func main() {
 		}
 	}()
 
-	// --- auto-start scheduler (non-blocking, idempotent) ---
 	if err := scheduler.Start(context.Background()); err != nil {
 		log.Logger.Error("auto-start scheduler failed", "err", err)
 	}
 
-	// --- wait for shutdown signal ---
 	<-ctx.Done()
 	log.Logger.Info("shutdown initiated")
 
-	// 1) stop periodic background work first
 	_ = scheduler.Stop()
 
-	// 2) then gracefully stop HTTP server
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

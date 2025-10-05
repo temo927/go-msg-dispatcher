@@ -2,8 +2,7 @@ openapi: 3.0.3
 info:
   title: Message Dispatcher API
   version: "1.0.0"
-  description: >
-    A simple API for controlling and monitoring the automatic message sending system.
+  description: A simple API for controlling and monitoring the automatic message sending system.
 
 servers:
   - url: http://localhost:8080
@@ -12,105 +11,226 @@ paths:
   /api/v1/scheduler/start:
     post:
       summary: Start the automatic message sending scheduler
+      tags: [Scheduler]
       responses:
         "200":
           description: Scheduler started
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: scheduler started
-        "409":
-          description: Scheduler already running
+                $ref: '#/components/schemas/EnvelopeSuccess'
+              examples:
+                started:
+                  value:
+                    status: ok
+                    data:
+                      message: scheduler started
         "500":
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeError'
 
   /api/v1/scheduler/stop:
     post:
       summary: Stop the automatic message sending scheduler
+      tags: [Scheduler]
       responses:
         "200":
           description: Scheduler stopped
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  data:
-                    type: object
-                    properties:
-                      message:
-                        type: string
-                        example: scheduler stopped
-        "409":
-          description: Scheduler not running
+                $ref: '#/components/schemas/EnvelopeSuccess'
+              examples:
+                stopped:
+                  value:
+                    status: ok
+                    data:
+                      message: scheduler stopped
         "500":
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeError'
 
   /api/v1/messages/sent:
     get:
       summary: Retrieve a list of sent messages
+      tags: [Messages]
       parameters:
         - name: limit
           in: query
-          required: false
           schema:
             type: integer
             default: 50
+            minimum: 1
         - name: offset
           in: query
-          required: false
           schema:
             type: integer
             default: 0
+            minimum: 0
       responses:
         "200":
           description: List of sent messages
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
-                  data:
-                    type: object
-                    properties:
+                $ref: '#/components/schemas/EnvelopeSentList'
+              examples:
+                example:
+                  value:
+                    status: ok
+                    data:
                       items:
-                        type: array
-                        items:
-                          type: object
-                          properties:
-                            id:
-                              type: string
-                              example: 67f2f8a8-ea58-4ed0-a6f9-ff217df4d849
-                            to_phone:
-                              type: string
-                              example: "+995555111111"
-                            content:
-                              type: string
-                              example: "Insider - Project"
-                            provider_message_id:
-                              type: string
-                              example: 67f2f8a8-ea58-4ed0-a6f9-ff217df4d849
-                            sent_at:
-                              type: string
-                              format: date-time
-                      count:
-                        type: integer
-                        example: 1
+                        - id: "67f2f8a8-ea58-4ed0-a6f9-ff217df4d849"
+                          to_phone: "+905551111111"
+                          content: "Insider - Project"
+                          provider_message_id: "67f2f8a8-ea58-4ed0-a6f9-ff217df4d849"
+                          sent_at: "2025-10-05T18:11:04Z"
+                      count: 1
         "500":
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeError'
+
+  /api/v1/messages:
+    post:
+      summary: Create a new message (queued for automatic sending)
+      tags: [Messages]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMessageRequest'
+            examples:
+              sample:
+                value:
+                  to_phone: "+905551234567"
+                  content: "Welcome to our platform! Your code is 4321."
+      responses:
+        "201":
+          description: Message created and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeCreateResponse'
+              examples:
+                created:
+                  value:
+                    status: ok
+                    data:
+                      id: "524eca80-b1ab-429d-9d86-493717b1ee80"
+                      status: "queued"
+                      created: "2025-10-05T18:11:04Z"
+        "400":
+          description: Invalid request (missing to_phone/content or bad JSON)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeError'
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvelopeError'
+
+components:
+  schemas:
+    EnvelopeSuccess:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        data:
+          type: object
+          additionalProperties: true
+
+    EnvelopeError:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: string
+          example: something went wrong
+        code:
+          type: string
+          nullable: true
+          example: internal_error
+
+    CreateMessageRequest:
+      type: object
+      required: [to_phone, content]
+      properties:
+        to_phone:
+          type: string
+          example: "+905551234567"
+        content:
+          type: string
+          maxLength: 1000
+          example: "Welcome to our platform! Your code is 4321."
+
+    EnvelopeCreateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "524eca80-b1ab-429d-9d86-493717b1ee80"
+            status:
+              type: string
+              enum: [queued, processing, sent, failed]
+              example: queued
+            created:
+              type: string
+              format: date-time
+              example: "2025-10-05T18:11:04Z"
+
+    SentMessageItem:
+      type: object
+      properties:
+        id:
+          type: string
+        to_phone:
+          type: string
+        content:
+          type: string
+        provider_message_id:
+          type: string
+          nullable: true
+        sent_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    EnvelopeSentList:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        data:
+          type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/SentMessageItem'
+            count:
+              type: integer
+              example: 1
